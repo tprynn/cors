@@ -86,11 +86,12 @@ run_test = function(test_index, manual_test_obj) {
 		xhr.setRequestHeader(header[0], header[1])
 	}
 
-	xhr.withCredentials = test.creds
+	if(test.creds != null)
+		xhr.withCredentials = test.creds
  
 	xhr.onreadystatechange = function() {
 		if (xhr.readyState == XMLHttpRequest.DONE) {
-			log('test ' + index + ' ' + test.method)
+			log('test ' + index + ': ' + test.context)
 			var n_assertions = test.assertions.length
 			for (var i = 0; i < n_assertions; i++) {
 				var assertion = test.assertions[i]
@@ -107,7 +108,8 @@ run_test = function(test_index, manual_test_obj) {
 }
 
 log = function(text) {
-	document.getElementById('log').innerText += text + '\n'
+	text = text.replace(/[<>&]/g, '')
+	document.getElementById('log').innerHTML += text + '\n'
 	console.log(text)
 }
 
