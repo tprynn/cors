@@ -1,10 +1,12 @@
 
 var express = require('express')
+
+var cookieParser = require('cookie-parser')
 var bodyParser = require('body-parser')
 var useragent = require('useragent')
 var uuid = require('node-uuid')
-var sqlite3 = require('sqlite3')
 var store = require('json-fs-store')()
+var lockfile = require('lockfile')
 
 var testcases = require('./testcases.js')
 
@@ -13,25 +15,32 @@ var app = express()
 app.set('etag', false); 
 app.set('x-powered-by', false);
 
+app.use(cookieParser())
 app.use(bodyParser.text({type:"*/*"}))
 
 app.get('/status', function(req, res) {
 	console.log('hit /status')
+	res.set({'Access-Control-Expose-Headers': '*'})
 	res.send("OK")
 })
 
 app.get('/id/new', function(req, res) {
 	var id = uuid.v4()
-	res.setHeader('Access-Control-Allow-Origin', '*')
-	res.send(id)
+
 	store.add({
 		id: id, 
 		useragent: req.headers['user-agent'],
 		browser: useragent.parse(req.headers['user-agent']).toString(),
 		testcases: []
 	}, function(err) {
-		console.log(err)
+		if(err) console.log(err)
 	})
+
+	res.cookie('uuid', id)
+	res.setHeader('Access-Control-Allow-Origin', 
+					req.get('Origin') ? req.get('Origin') : '*')
+	res.setHeader('Access-Control-Allow-Credentials', 'true')
+	res.send(id)
 })
 
 app.all('/testcase/:index', function(req, res) {
@@ -49,11 +58,15 @@ app.all('/testcase/:index', function(req, res) {
 		return
 	}
 
+	console.log(req.method + ' ' + req.url)
+	console.log('running testcase ' + req.params.index)
+
 	// Check our expectations against the user's query
 	var expectations = []
 	for (var i = 0; i < testcase.expectations.length; i++) {
 		var expectation = testcase.expectations[i]
 		var result = expectation.expect(req)
+		console.log('\t' + expectation.description + ': ' + result)
 		expectations.push({
 			description: expectation.description,
 			result: result
@@ -67,30 +80,22 @@ app.all('/testcase/:index', function(req, res) {
 	}
 
 	res.setHeader("Content-Type", "application/json")
+	res.setHeader("Connection", "close")
 
-	var output = JSON.stringify({
+	var result = {
 		"method": req.method,
 		"host": req.hostname,
 		"uri": req.url,
 		"headers": req.headers,
 		"content": req.body,
 		"expectations": expectations
-	}, null, 2)
+	}
 
 	// Store this crap in case we want to see it later
-	store.load(req.query.uuid, function(err, object) {
-		if(err) {
-			console.log(err)
-			return
-		}
+	store_test_result(req.query.uuid, req.params.index, result)
 
-		object.testcases[req.params.index] = output
-		store.add(object, function(err) {
-			console.log(err)
-		})
-	})
-
-	console.log(output)
+	var output = JSON.stringify(result, null, 2)
+	//console.log(output)
 	res.send(output)
 })
 
@@ -100,4 +105,34 @@ app.listen(3000, function() {
 
 uuid.validate = function(id) {
 	return id.match(/^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$/) != null
+}
+
+store_test_result = function(uuid, test_index, result) {
+	lockfile.lock('store/' + uuid + '.lock', {wait:500, retries:3, retryWait:250}, function(err) {
+		if(err) {
+			console.log('could not acquire lock!')
+			console.log(err)
+			console.log(result)
+			return
+		}
+
+		store.load(uuid, function(err, object) {
+			if(err) {
+				lockfile.unlock('store/' + uuid + '.lock', function(err) {
+					if(err) console.log(err)
+				})
+				console.log(err)
+				return
+			}
+
+			object.testcases[test_index] = result
+
+			store.add(object, function(err) {
+				if(err) console.log(err)
+				lockfile.unlock('store/' + uuid + '.lock', function(err) {
+					if(err) console.log(err)
+				})
+			})
+		})
+	})
 }

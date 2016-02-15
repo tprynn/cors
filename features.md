@@ -32,11 +32,23 @@ Access-Control-Allow-Headers
 		- Origin
 		- Referrer?
 		- Can users modify these headers? Submit multiple headers?
-	* Simple requests
+	* What happens when a request gets redirected? E.g. OPTIONS
+
+## Simple Requests
+	* method
 		- GET, HEAD, POST
+	* auth
 		- Cookies OK
 		- Client Certs ??
-	* What happens when a request gets redirected? E.g. OPTIONS
+	* headers
+		- Accept
+		- Accept-Language
+		- Content-Language
+		- Content-Type
+	* content-type
+		- application/x-www-form-urlencoded
+		- multipart/form-data
+		- text/plain
 
 ## Preflights
 	* Access-Control-Request-Methods
@@ -80,11 +92,11 @@ Access-Control-Allow-Headers
 		- empty
 		- subdomains
 		- lists? null?
-	* subdomains
+	* subdomains/same-origin-policy
 		- a.example.com -> b.example.com
 		- a.example.com <-> example.com
 		- example.com.attacker.com -> example.com
-
+		- example.com:3333 -> example.com:4444
 		example.com.example.com <-> example.com
 
 ## Credentials
@@ -99,7 +111,7 @@ Access-Control-Allow-Headers
 	* Simple requests OK
 		- GET, POST, HEAD w/ creds
 	* Other methods require pre-flight
-		- PUT, PATCH, UPDATE, DELETE
+		- PUT, PATCH, DELETE
 	* Case-sensitive
 
 ## Age
