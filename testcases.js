@@ -1,11 +1,11 @@
 
 origin = {
-	url: "http://sub.cors.local"
+	url: "http://sub.cors.tannerprynn.com"
 }
 
 server = {
-	url: "http://cors.local/",
-	subdomain: "http://sub.sub.cors.local/"
+	url: "http://cors.tannerprynn.com/",
+	subdomain: "http://sub.sub.cors.tannerprynn.com/"
 }
 
 prototype = {
