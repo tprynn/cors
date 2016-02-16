@@ -1,3 +1,13 @@
+
+origin = {
+	url: "http://sub.cors.local"
+}
+
+server = {
+	url: "http://cors.local/",
+	subdomain: "http://sub.sub.cors.local/"
+}
+
 prototype = {
 	context: "a description of this test case",
 	method: "GET,POST,...",
@@ -138,15 +148,6 @@ assertions = {
 			}
 		}
 	}
-}
-
-origin = {
-	url: "http://sub.cors.local"
-}
-
-server = {
-	url: "http://cors.local/",
-	subdomain: "http://sub.sub.cors.local/"
 }
 
 cases = [
@@ -562,6 +563,7 @@ cases = [
 			assertions.body.read(false)
 		]
 	},
+
 	// headers
 		{
 		context: "expose-headers works correctly w/o creds (POST)",
@@ -791,13 +793,15 @@ cases = [
 		method: "HEAD",
 		url: server.url,
 		request_headers: [],
+		body: "test",
 		returned_headers: [
 			["Access-Control-Allow-Origin", "*"],
 			["Secret-Header", "Should Not Read"]
 		],
 		expectations: [
 			expectations.method("HEAD"),
-			expectations.cookies.sent(false)
+			expectations.cookies.sent(false),
+			expectations.body.sent(false)
 		],
 		assertions: [
 			assertions.http.status(200),

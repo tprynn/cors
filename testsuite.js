@@ -50,6 +50,11 @@ run_tests = function() {
 		// check each running test to see if it's finished, and move to finished tests
 		for(var i = 0; i < running_tests.length; i++) {
 			var test = running_tests[i]
+
+			if(!test) {
+				continue
+			}
+
 			if(test.xhr.readyState == XMLHttpRequest.DONE) {
 				finished_tests.push(test)
 				running_tests[i] = null
