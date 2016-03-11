@@ -126,7 +126,7 @@ app.all('/:type(simple|complex)/:index/:request?', function(req, res) {
 		store.test(req.query.uuid, req.params.index, result)
 	}
 	else {
-		console.log(req.query.uuid)
+		//console.log(req.query.uuid)
 		store.complex(req.query.uuid, req.params.index, req.params.request, result)
 	}
 

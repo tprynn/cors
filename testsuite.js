@@ -3,16 +3,25 @@ uuid = 'default-id'
 requests = []
 
 start = function() {
-	var xhr = new XMLHttpRequest()
-	xhr.open('GET', server.url + 'id/new')
-	xhr.withCredentials = true
-	xhr.send()
+	log.status('trying our first cross-site request...')
 
-	xhr.onreadystatechange = function() {
-		if(xhr.readyState == XMLHttpRequest.DONE) {
-			uuid = xhr.responseText
-			run_tests()
+	try {
+		var xhr = new XMLHttpRequest()
+		xhr.open('GET', server.url + 'id/new')
+		xhr.withCredentials = true
+		xhr.send()
+
+		xhr.onreadystatechange = function() {
+			if(xhr.readyState == XMLHttpRequest.DONE) {
+				uuid = xhr.responseText
+				run_tests()
+			}
 		}
+	}
+	catch(ex) {
+		message = "Got an exception on our first request, your browser might not support CORS. (FAIL)"
+		log.status(message)
+		log.text(message)
 	}
 }
 
@@ -21,6 +30,7 @@ var running_tests = []
 var finished_tests = []
 
 run_tests = function() {
+	log.status('spinning up the test runner...')
 
 	var n_parallel_requests = 3
 	
@@ -50,6 +60,10 @@ run_tests = function() {
 		if(locked) return;
 		locked = true;
 
+		log.status(finished_tests.length + ' finished_tests, ' +
+				running_tests.length + ' running tests, ' +
+				queued_tests.length + ' tests remaining')
+
 		// if all tests are finished, end the test runner
 		if(queued_tests.length === 0) {
 			var finished = true
@@ -61,6 +75,7 @@ run_tests = function() {
 			}
 			
 			if(finished) {
+				log.status('finished all the tests, reporting results...')
 				clearInterval(intervalId)
 				post_results(finished_tests)
 			}
@@ -195,7 +210,11 @@ post_results = function(xhrobjs) {
 	var xhr = new XMLHttpRequest()
 	xhr.open("POST", server.url + 'results?uuid=' + uuid)
 
-	xhr.onreadystatechange = function() {}
+	xhr.onreadystatechange = function() {
+		if (xhr.readyState == XMLHttpRequest.DONE) {
+			log.status("we're all done here!")
+		}
+	}
 
 	xhr.send(JSON.stringify(results, null, 4))
 }
@@ -220,7 +239,19 @@ log = {
 	assertion: function(description, result) {
 		message = '\t' + description + ': ' + result
 		log.text(message)
+	},
+
+	status: function(message) {
+		document.getElementById('status').innerHTML = message
 	}
 }
 
-start()
+document.getElementById('start').addEventListener("click", start)
+
+document.getElementById('show-log').addEventListener("click", function() {
+	var log = document.getElementById('log')
+	if(log.style.display === "none")
+		log.style.display = "block"
+	else
+		log.style.display = "none"
+})
