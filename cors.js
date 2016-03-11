@@ -5,9 +5,8 @@ var cookieParser = require('cookie-parser')
 var bodyParser = require('body-parser')
 var useragent = require('useragent')
 var uuid = require('node-uuid')
-var store = require('json-fs-store')()
-var lockfile = require('lockfile')
 
+var store = require('./store.js')
 var testcases = require('./testcases.js')
 
 var app = express()
@@ -18,6 +17,16 @@ app.set('x-powered-by', false);
 app.use(cookieParser())
 app.use(bodyParser.text({type:"*/*"}))
 
+app.get('/', function(req, res) {
+	if(req.hostname === 'cors.tannerprynn.com')
+		res.redirect('http://sub.cors.tannerprynn.com')
+	res.sendFile('cors.html', {root: __dirname})
+})
+
+app.get('/:file(cors.html|testcases.js|testsuite.js)', function(req, res) {
+	res.sendFile(req.params.file, {root: __dirname})
+})
+
 app.get('/status', function(req, res) {
 	console.log('hit /status')
 	res.set({'Access-Control-Expose-Headers': '*'})
@@ -27,11 +36,11 @@ app.get('/status', function(req, res) {
 app.get('/id/new', function(req, res) {
 	var id = uuid.v4()
 
-	store.add({
-		id: id, 
+	store.new(id, {
 		useragent: req.headers['user-agent'],
 		browser: useragent.parse(req.headers['user-agent']).toString(),
-		testcases: []
+		testcases: [],
+		complexcases: []
 	}, function(err) {
 		if(err) console.log(err)
 	})
@@ -43,14 +52,20 @@ app.get('/id/new', function(req, res) {
 	res.send(id)
 })
 
-app.all('/testcase/:index', function(req, res) {
+app.all('/:type(simple|complex)/:index/:request?', function(req, res) {
 	if(!uuid.validate(req.query.uuid)) {
 		res.sendStatus(400)
 		res.end()
 		return
 	}
 
-	var testcase = testcases.cases[req.params.index]
+	var testcase = null
+	if(req.params.type === "simple") {
+		var testcase = testcases.cases[req.params.index]
+	}
+	else {
+		var testcase = testcases.complex_cases[req.params.index][req.params.request]
+	}
 
 	if(!testcase) {
 		res.sendStatus(400)
@@ -59,7 +74,22 @@ app.all('/testcase/:index', function(req, res) {
 	}
 
 	console.log(req.method + ' ' + req.url)
-	console.log('running testcase ' + req.params.index)
+
+	if(req.method === testcase.server_ignore_method) {
+		console.log('ignoring ' + req.method + ' for testcase ' + req.params.index +
+				(req.params.type === "complex" ? '.' + req.params.request : ''))
+		// Set the response headers for this test case
+		for (var i = 0; i < testcase.returned_headers.length; i++) {
+			var header = testcase.returned_headers[i]
+			res.setHeader(header[0], header[1])
+		}
+		res.sendStatus(200)
+		res.end()
+		return
+	}
+
+	console.log('running testcase ' + req.params.index +
+				(req.params.type === "complex" ? '.' + req.params.request : ''))
 
 	// Check our expectations against the user's query
 	var expectations = []
@@ -92,11 +122,49 @@ app.all('/testcase/:index', function(req, res) {
 	}
 
 	// Store this crap in case we want to see it later
-	store_test_result(req.query.uuid, req.params.index, result)
+	if(req.params.type === "simple") {
+		store.test(req.query.uuid, req.params.index, result)
+	}
+	else {
+		console.log(req.query.uuid)
+		store.complex(req.query.uuid, req.params.index, req.params.request, result)
+	}
 
 	var output = JSON.stringify(result, null, 2)
 	//console.log(output)
 	res.send(output)
+})
+
+app.options('/results', function(req, res) {
+	res.setHeader("Access-Control-Allow-Origin", req.origin)
+	res.setHeader("Access-Control-Allow-Methods", req.method)
+	res.setHeader("Access-Control-Allow-Credentials", "true")
+	res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+	res.sendStatus(200)
+})
+
+app.post('/results', function(req, res) {
+	console.log("Got results from " + req.query.uuid)
+	//console.log(req.query.uuid)
+	//console.log(req.body)
+	if(!uuid.validate(req.query.uuid)) {
+		res.sendStatus(400)
+		res.end()
+		return
+	}
+
+	try {
+		results = JSON.parse(req.body)
+		store.results(req.query.uuid, results)
+		res.sendStatus(200)
+		res.end()
+		return
+	}
+	catch(e) {
+		console.log("Failed to store results: " + e.toString())
+	}
+
+	res.sendStatus(500)
 })
 
 app.listen(3000, function() {
@@ -104,35 +172,11 @@ app.listen(3000, function() {
 })
 
 uuid.validate = function(id) {
+	if(!(id && id.match)) {
+		return false
+	}
+
 	return id.match(/^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$/) != null
 }
 
-store_test_result = function(uuid, test_index, result) {
-	lockfile.lock('store/' + uuid + '.lock', {wait:500, retries:3, retryWait:250}, function(err) {
-		if(err) {
-			console.log('could not acquire lock!')
-			console.log(err)
-			console.log(result)
-			return
-		}
 
-		store.load(uuid, function(err, object) {
-			if(err) {
-				lockfile.unlock('store/' + uuid + '.lock', function(err) {
-					if(err) console.log(err)
-				})
-				console.log(err)
-				return
-			}
-
-			object.testcases[test_index] = result
-
-			store.add(object, function(err) {
-				if(err) console.log(err)
-				lockfile.unlock('store/' + uuid + '.lock', function(err) {
-					if(err) console.log(err)
-				})
-			})
-		})
-	})
-}
