@@ -1,0 +1,1 @@
+CREATE TABLE data(uuid text primary key, json blob);
