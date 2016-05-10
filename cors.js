@@ -18,9 +18,12 @@ app.use(cookieParser())
 app.use(bodyParser.text({type:"*/*"}))
 
 app.get('/', function(req, res) {
-	if(req.hostname === 'cors.tannerprynn.com')
+	if(req.hostname == 'cors.tannerprynn.com') {
 		res.redirect('http://sub.cors.tannerprynn.com')
-	res.sendFile('cors.html', {root: __dirname})
+	}
+	else {
+		res.sendFile('cors.html', {root: __dirname})
+	}
 })
 
 app.get('/:file(cors.html|testcases.js|testsuite.js)', function(req, res) {
